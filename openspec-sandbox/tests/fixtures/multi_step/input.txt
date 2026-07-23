@@ -1,0 +1,1 @@
+A registered user with a verified email and an active subscription opens the billing page and clicks "Download Invoice". The system generates a PDF invoice and starts the download.

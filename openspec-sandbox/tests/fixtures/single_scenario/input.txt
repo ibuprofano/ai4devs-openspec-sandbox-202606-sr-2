@@ -1,0 +1,1 @@
+A user types their name into the greeting box and clicks "Say Hello". The page shows "Hello, <name>!" back to them.

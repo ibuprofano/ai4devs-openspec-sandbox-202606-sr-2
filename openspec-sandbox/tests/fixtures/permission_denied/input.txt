@@ -1,0 +1,1 @@
+An editor tries to delete another user's post. Only admins are allowed to delete other users' posts, so the editor should see a "Permission denied" message and the post should remain.

@@ -1,0 +1,1 @@
+A logged-in user adds an item to their cart. If the item is out of stock, they should see an error message instead and the cart should not change.

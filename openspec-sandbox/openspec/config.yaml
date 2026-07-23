@@ -1,0 +1,41 @@
+schema: spec-driven
+
+context: |
+  Domain: a utility that converts free-form text describing user actions
+  (requirements, user stories, meeting notes, manual QA scripts, chat
+  transcripts, etc.) into valid BDD/Gherkin feature files. Designed to be
+  integrable across different tech stacks and contexts, not just consumed
+  as a Python library.
+
+  Tech stack:
+    - Python 3.11
+    - LLM abstraction (LiteLLM), default provider: Claude Sonnet 5
+      - Handles the actual NL -> Given/When/Then translation
+      - Provider-agnostic so consumers aren't locked to Anthropic
+    - gherkin-official (Cucumber's reference parser)
+      - Validates every generated .feature file before it's returned
+      - Reject-and-retry on malformed output
+    - Versioned prompt templates (plain files, not hardcoded strings)
+    - Typer (CLI interface) - `text2gherkin convert input.txt -o output.feature`
+    - FastAPI (REST interface) - single `POST /convert` endpoint
+    - MCP server wrapper - exposes conversion as a tool for Claude Code /
+      other MCP-compatible agents and IDEs
+    - Docker - bundles CLI + API into one image
+    - pytest - golden-file fixtures (input text -> expected .feature) plus
+      Gherkin parser validation tests
+
+  Architecture notes:
+    - Core is a single pure function `convert(text: str) -> str`; CLI, API,
+      and MCP wrapper are thin adapters over it.
+    - No database - this is a stateless transformation utility. Persistence
+      (e.g. an audit trail of past conversions) is an optional future
+      add-on, not a core dependency.
+
+
+rules:
+  proposal:
+    - Include example input-text -> expected-Gherkin pairs to anchor what "correct" output means for reviewers
+    - Justify any new persistent storage; this utility is stateless by design, no DB without explicit justification
+  tasks:
+    - Include a Gherkin-validation task (parse output with gherkin-official) before any task that generates or changes prompt output is marked done
+
