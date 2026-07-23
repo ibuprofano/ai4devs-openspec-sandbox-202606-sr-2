@@ -1,0 +1,97 @@
+name: Docker verify (text2gherkin)
+
+on:
+  push:
+    branches: [gonzalo-roland]
+    paths:
+      - "openspec-sandbox/Dockerfile"
+      - "openspec-sandbox/.dockerignore"
+      - "openspec-sandbox/pyproject.toml"
+      - "openspec-sandbox/src/**"
+      - ".github/workflows/docker-verify.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openspec-sandbox
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t text2gherkin .
+
+      - name: Run API container
+        run: docker run -d -p 8000:8000 --name t2g-test text2gherkin
+
+      - name: Wait for API to be up
+        run: |
+          for i in $(seq 1 20); do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs | grep -q 200; then
+              echo "API is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not come up in time"
+          docker logs t2g-test
+          exit 1
+
+      - name: POST /convert (no API key configured -> expect graceful 502, not a crash)
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8000/convert \
+            -H "content-type: application/json" \
+            -d '{"text": "some input"}')
+          status=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "status=$status"
+          echo "body=$body"
+          if [ "$status" = "200" ]; then
+            echo "$body" | grep -q '"gherkin"' || (echo "200 but no gherkin field" && exit 1)
+            echo "Got a real 200 (an API key must be configured) - OK"
+          elif [ "$status" = "502" ]; then
+            echo "$body" | grep -q '"detail"' || (echo "502 but no detail field" && exit 1)
+            echo "Got expected graceful 502 with detail - OK"
+          else
+            echo "Unexpected status $status"
+            exit 1
+          fi
+
+      - name: Stop and remove API container
+        run: |
+          docker stop t2g-test
+          docker rm t2g-test
+
+      - name: Run CLI via stdin (no API key -> expect clean non-zero exit, no traceback)
+        run: |
+          set +e
+          output=$(echo "some input text" | docker run --rm -i text2gherkin text2gherkin convert 2>&1)
+          exit_code=$?
+          echo "$output"
+          echo "exit_code=$exit_code"
+          if echo "$output" | grep -qi "Traceback"; then
+            echo "Found a raw Python traceback - error handling is not clean"
+            exit 1
+          fi
+          if [ $exit_code -eq 0 ]; then
+            echo "$output" | grep -qi "^Feature:" || (echo "Exit 0 but output doesn't look like Gherkin" && exit 1)
+            echo "CLI succeeded with real output (an API key must be configured) - OK"
+          else
+            echo "CLI failed cleanly with exit code $exit_code and no traceback - OK"
+          fi
+
+      - name: Check no secrets baked into the image
+        run: |
+          if docker history --no-trunc text2gherkin | grep -qi "api_key\|sk-ant\|sk-"; then
+            echo "Found something that looks like a secret in image history!"
+            docker history --no-trunc text2gherkin
+            exit 1
+          fi
+          if docker inspect text2gherkin | grep -qi "api_key"; then
+            echo "Found API_KEY reference in image config!"
+            docker inspect text2gherkin
+            exit 1
+          fi
+          echo "No secrets found in image history or config - OK"
