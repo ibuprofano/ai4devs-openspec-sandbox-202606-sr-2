@@ -1,6 +1,6 @@
 
 ## Evencias
-*Ver openspecevidencia1.png y openspecevidencia2.png*
+*Ver openspecevidence1.png y openspecevidence2.png*
 
 ## 3 Pilares
 *Micro-tarea:* Parser de tareas/behaviors de usuario a BDD/Gherkin
